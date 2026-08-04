@@ -12,7 +12,14 @@ to the RTX 3050 (4GB VRAM). Confirmed at Phase 1: 2.2GB resident, 100% GPU,
   option. Roughly double the parameters, generally stronger reasoning and
   SQL generation, but doesn't fully fit in 4GB VRAM at Q4 — it would split
   across GPU/CPU, which is slower and, combined with only ~2GB of typically
-  free system RAM, risks disk-swap stalls mid-demo.
+  free system RAM, risks disk-swap stalls mid-demo. **Checked, not just
+  assumed, during Phase 5b:** at the time of that check, `nvidia-smi` showed
+  3.6GB VRAM free (fine), but `Get-CimInstance Win32_OperatingSystem` showed
+  only ~457MB of system RAM free out of 8GB total — far below the
+  blueprint's own "~4GB+ free" bar for attempting this stretch option. The
+  7B vs. 3B comparison below is therefore still reasoned, not measured on
+  this hardware in this session; the measurement that *was* taken was
+  "is it even safe to try right now," and the answer was no.
 - **Llama 3.1 8B** — already pulled locally (4.9GB) from earlier
   experimentation. Strong general-purpose model, but at that size it
   doesn't fit in 4GB VRAM either, so it's subject to the same GPU/CPU-split

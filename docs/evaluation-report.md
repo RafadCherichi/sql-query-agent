@@ -1,5 +1,11 @@
 # Evaluation Report
 
+> **Note:** This report has two parts. The original evaluation (11/28) and
+> its full failure analysis are preserved below exactly as first written.
+> The **Phase 5b: Targeted Improvement Pass** section at the bottom adds a
+> second, later run (14/28) after two bounded prompt fixes — it does not
+> replace or edit the original numbers or analysis.
+
 ## Headline result
 
 **11 / 28 (39.3%) execution accuracy** — does the agent's SQL return the same
@@ -177,3 +183,205 @@ points at a concrete, different fix (stronger prompting, clearer tool
 output, semantic result-sanity checks, join-emphasis in the system prompt).
 That's a more useful result for this project's purpose than a high pass
 rate with no insight into why the other 60% failed would have been.
+
+---
+
+## Phase 5b: Targeted Improvement Pass
+
+Two of the seven failure clusters above were systematic (same root cause
+repeating across multiple questions), not one-off model quirks, so they
+were worth one bounded prompt fix each — see
+`docs/learning-notes/self-correction-behavior.md` for what was changed and
+why the other five clusters were deliberately left alone.
+
+### New score: 14 / 28 (50.0%), up from 11 / 28 (39.3%)
+
+Raw before/after captures are preserved in `src/eval/results_before_5b.jsonl`
+(the original 11/28 run) and `src/eval/results.jsonl` (this 14/28 run) —
+same harness, same 28 questions, same grading logic, prompt is the only
+variable.
+
+| Category | Before | After |
+|---|---|---|
+| Single-table | 5/8 | 6/8 |
+| Join | 3/12 | 5/12 |
+| Aggregation | 3/8 | 3/8 |
+
+### What changed, question by question
+
+Net movement was **+4 fixed, −1 regressed = +3**. Not a clean sweep in
+either direction:
+
+| ID | Before | After | What happened |
+|---|---|---|---|
+| S7 | FAIL | **PASS** | Fixed. Correctly counted 18 playlists this time instead of misreading the schema sample-preview as the total. |
+| J6 | FAIL | **PASS** | Fixed. The empty-first-response anomaly didn't recur. |
+| J10 | FAIL | **PASS** | Fixed — the FK-id instruction worked exactly as intended: joined to `media_types` and returned `'Protected AAC audio file'` instead of the raw ID. |
+| A7 | FAIL | **PASS** | Fixed — converged on the right query in 1 iteration (was non-converging before). |
+| **A6** | **PASS** | **FAIL** | **Regression.** Previously a clean 3-table join + `SUM` + `GROUP BY` pass. Now stalls with narration ("Let's proceed to see how...") after one iteration and never calls a tool. Same failure mode that afflicts several other questions — this run, it landed on a question that was previously solid. |
+| S3, J2, J4 | FAIL | FAIL | Unchanged — still narration, same as before. |
+| A3 | FAIL | FAIL | Unchanged — still a hallucinated/wrong-logic answer, though the specific query differs (counted `playlists` rows instead of `playlist_track` rows this time). |
+| A5 | FAIL | FAIL | Unchanged — still can't find the 4-table join path for revenue; got as far as looking up Iron Maiden's `ArtistId` and stopped. |
+| S5, J1, J7, J11, A2, A4 | FAIL | FAIL | **Changed failure mode**, still fail. All five were previously FK-id or silent-wrong-SQL failures with an actual (wrong) query attempt; now they fail *earlier*, by narrating instead of ever calling a tool. `J11` additionally hallucinated a nonexistent table name (`tracks_playlists`; the real table is `playlist_track`) while narrating. |
+| J8 | FAIL | FAIL (near-miss) | **Interesting edge case, not a harness bug.** The agent actually found the *correct* data — `Helena Holý`, `hholy@gmail.com` — but returned the name as one concatenated column (`FirstName || ' ' || LastName`) instead of the ground truth's two separate columns. The grading logic (untouched, per scope) correctly marks this a miss since the literal string `"Helena Holý"` doesn't match `"Helena"` and `"Holý"` as separate values. Content-correct, format-different — a real limitation of exact-value grading, not of the agent's SQL reasoning. |
+
+### The honest, slightly uncomfortable finding
+
+The narration-instead-of-acting fix did not just fail to fully solve its
+own target category (`S3`/`J2`/`J4` are still narrating) — the *count* of
+questions whose final failure is "stalled without calling a tool" actually
+**grew**, from 4 in the original run to roughly 10 in this one. Several
+previously distinct failure modes (FK-id wrong answers, silently-wrong SQL,
+non-converging retries) shifted *into* narration failures rather than being
+resolved by it, even though the two targeted mechanisms clearly did work in
+the specific cases where the model got far enough to act (`J10`, `A7`, and
+the sanity-check retest of `J10` mid-session both confirm the FK-id fix
+functions correctly on its own).
+
+The likely explanation: the system prompt grew substantially (three new
+worked examples) to fix two specific behaviors, and on a 3B model a longer,
+denser system prompt appears to correlate with *more* stalling overall, not
+less — plausibly because more of the prompt's attention budget goes to
+processing the added examples themselves. This wasn't the effect being
+aimed for, and it's reported here rather than smoothed over, because it's
+a genuinely useful, generalizable lesson: **on a small model, a targeted
+prompt fix should be measured by its net effect on the full eval set, not
+just verified on the cases it was designed for** — a fix that visibly works
+in isolation (as both targeted fixes did, in spot checks) can still shift
+where the model's failure mass lands in aggregate. Net accuracy still
+improved (+3) because the fixed cases outweighed the regression, but the
+margin is thinner than the "2 fixes, 4 questions" framing alone would
+suggest.
+
+### Reproducibility caveat
+
+A single spot-check rerun of `J8` outside the official 28-question pass
+produced a different trace than the recorded one (still ultimately failing,
+but via a different specific query at a different iteration count). This is
+worth flagging honestly: even at `temperature=0`, GPU floating-point
+execution isn't bitwise-deterministic run to run, so exact reproduction of
+any single question's trace isn't guaranteed — the scored 14/28 comes from
+one complete, consistent run of all 28 questions in a single pass, not from
+cherry-picking the best individual attempt per question.
+
+### What was deliberately not touched
+
+Per scope: the eval harness, the 28 questions and their ground truth, and
+the other five original failure clusters (hallucinated schema claims,
+silently-wrong SQL that raises no error, non-converging retries as their
+own category, the empty-first-response anomaly's root cause, and multi-hop
+join reasoning depth) were left exactly as documented, not prompt-engineered
+around. Chasing every individual failure with a bespoke prompt rule would
+overfit the prompt to this specific 28-question set rather than genuinely
+improving the agent — the two fixes made here were chosen because they were
+*systematic* (same root cause, multiple questions), not because they were
+easy to patch.
+
+---
+
+## Phase 5b, continued: replacing the prompt fix with a graph-level guard
+
+The "uncomfortable finding" above — narration failures growing from 4 to
+~10 — turned out to be worse than a growing minority: measured directly by
+rerunning the exact canonical question ("Which artist has the most albums?")
+10 times, it failed **10/10**. Not flaky, not occasional — under the
+Phase 5b prompt, this specific question had become a near-certain failure.
+That measurement (not a guess) is what justified moving past prompting to a
+mechanical fix, per the project's own stated priority: verify before
+assuming a fix works.
+
+### The fix: a graph-level invariant, not a bigger prompt
+
+The prompt already told the model not to narrate — that clearly wasn't
+enough on its own. Instead of adding more prompt text, `src/agent/graph.py`
+now enforces a structural rule the graph itself checks: **a SQL agent
+cannot have a legitimate final answer without having successfully executed
+at least one query.** A new `_has_successful_query()` check inspects the
+message history for a `run_query` call whose result didn't start with
+`Error:`. If the model tries to stop (no `tool_calls`) before that's ever
+happened, the graph doesn't treat it as done — it routes to a new `nudge`
+node ("You described an action without actually taking it. Call the tool
+now.") and loops back, consuming one iteration of the same `MAX_ITERATIONS`
+budget so a truly stuck model still hits `force_answer` rather than looping
+forever.
+
+This is a different kind of fix than the Phase 5b prompt changes: instead
+of hoping the model follows an instruction, the graph mechanically prevents
+the specific broken state (ending without ever having queried anything)
+from being treated as a valid stopping point at all.
+
+Rerunning the same 10x canonical-question check with the guard in place:
+**10/10 correct.** Full test suite: 13/13 passing, including the
+`tests/test_graph.py` smoke test that had just failed twice in a row.
+
+### New score: 20 / 28 (71.4%) — up from 14/28, up from the original 11/28
+
+| Stage | Score | File |
+|---|---|---|
+| Original (Phase 5) | 11/28 (39.3%) | `src/eval/results_before_5b.jsonl` |
+| Prompt-only fix (Phase 5b, first pass) | 14/28 (50.0%) | `src/eval/results_5b_prompt_only.jsonl` |
+| **+ Graph-level guard (Phase 5b, final)** | **20/28 (71.4%)** | `src/eval/results.jsonl` |
+
+| Category | Original | Prompt-only | + Graph guard |
+|---|---|---|---|
+| Single-table | 5/8 | 6/8 | **8/8** |
+| Join | 3/12 | 5/12 | **7/12** |
+| Aggregation | 3/8 | 3/8 | **5/8** |
+
+All 8 single-table questions now pass. The mechanical guard fixed the
+narration problem at its source rather than in one specific spot — it
+helped broadly across the set, not just on the question it was measured
+against.
+
+### The 8 remaining failures — genuinely different now
+
+None of the 8 remaining failures are pure "stopped without ever querying"
+narration anymore — the guard closed that path entirely. What's left:
+
+- **Silent wrong-but-executable SQL (2: `J1`, `J4`).** `J1` typo'd the
+  track name again (`'Balls to the Wal'` this time, not `'Walk'` —
+  confirms this is a recurring, not one-off, weakness). `J4` is a new
+  variant of the same underlying category: it used `+` for string
+  concatenation (`e2.FirstName + ' ' + e2.LastName`) — valid *SQL Server*
+  syntax, but SQLite doesn't overload `+` for strings, so it silently
+  coerces to numeric and the query runs "successfully," returning nothing
+  useful. Both cases execute without a catchable error, so self-correction
+  has nothing to react to — still the sharpest limitation of the design,
+  exactly as originally documented.
+- **Exhausted the iteration budget without ever completing a working query
+  (3: `J11`, `A2`, `A5`).** These aren't stalls — `J11` correctly figured
+  out mid-conversation that its assumed table name (`tracks_playlists`)
+  was wrong and the real table is `playlist_track`, but ran out of
+  iterations before actually querying it. Genuine progress, just not
+  enough budget to finish. `A5` is the same known multi-hop-join limit as
+  before (found Iron Maiden's `ArtistId`, never assembled the 4-table
+  join to revenue).
+- **Known grading-format edge case, unchanged (1: `J8`).** Same as
+  reported above — correct data, concatenated name column instead of
+  separate `FirstName`/`LastName`. Not re-litigated; still not a harness
+  bug per scope.
+- **Fully reproducible hallucination, identical across all three runs
+  (1: `A3`).** `SELECT COUNT(*) FROM playlists WHERE name = 'Classical'`
+  every time — counts playlist rows instead of `playlist_track` rows,
+  then confidently claims the playlist "does not exist." Untouched by
+  either fix, exactly as predicted for a cluster deliberately left alone.
+- **A genuine limitation in the new guard itself, caught honestly
+  (1: `J3`).** `_has_successful_query()` only checks that *some* `run_query`
+  call succeeded — not that the *last* one is what the final answer is
+  based on. `J3` ran `SELECT * FROM employees LIMIT 3` (a schema-peek,
+  not an answer), which satisfied the invariant, then hit a real column
+  error on its actual attempt and stopped — the guard let it stop early
+  because the earlier throwaway query technically counted. This is a real,
+  narrow gap in the fix just shipped, reported here rather than glossed
+  over: the invariant is necessary but not sufficient.
+
+### Net assessment
+
+The mechanical fix did what the prompt-only fix couldn't: it didn't just
+reduce narration, it structurally prevented the specific broken state from
+being reachable, and that generalized well beyond the one question it was
+measured against (+6 net over the prompt-only stage, across all three
+categories, with zero regressions this time). The remaining 8 failures are
+now a small, well-characterized set of distinct, honestly-documented
+limitations — including one newly-discovered gap in the fix itself — rather
+than one dominant failure mode masking everything else.
