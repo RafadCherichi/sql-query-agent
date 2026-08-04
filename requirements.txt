@@ -1,0 +1,8 @@
+langgraph
+langchain-community
+langchain-core
+ollama
+sqlalchemy
+pandas
+streamlit
+pytest
