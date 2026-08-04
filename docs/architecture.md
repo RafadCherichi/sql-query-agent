@@ -67,6 +67,32 @@ a loop with a counter and an exit door:
 future Streamlit app) calls: give it a plain-English question, get back
 the full conversation trace including the final answer.
 
+## `src/eval/test_questions.py`
+The 28-question eval set. Each entry is a plain-English question paired
+with hand-verified ground-truth SQL (verified by actually running it
+against `chinook.db`, not just eyeballing it), split into three
+categories: single-table lookups, multi-table joins, and
+aggregations/group-bys.
+
+## `src/eval/harness.py`
+The grading logic. For each question: runs the ground-truth SQL through a
+fresh, independent SQLite connection (deliberately not reusing the
+agent's own tool code, so a shared bug can't hide a mismatch); runs the
+question through the real agent; pulls out the SQL and result from the
+agent's *last successful* `run_query` call (not what it claims in prose,
+since those can differ); and compares the two results row-by-row. A row
+counts as matching if its values are a **superset** of the expected
+row's values (so the agent adding an extra column like a `COUNT`
+alongside the answer isn't penalized) while still requiring the same
+*number* of rows (so it can't "pass" by dumping an entire table that
+happens to contain the right value somewhere in it).
+
+## `src/eval/run_eval.py`
+Runs every question in `test_questions.py` through the harness and
+writes one JSON line per question to `src/eval/results.jsonl` — written
+incrementally as it goes, so a partial run isn't lost if something
+crashes midway through 28 real LLM calls.
+
 ## `tests/test_tools.py`
 Fast, no-LLM-required tests that check each tool in isolation: correct
 tables come back, schema lookups work, valid queries return the right
@@ -78,6 +104,11 @@ One slower, real-LLM test that runs an actual question through the full
 agent loop and checks it reaches the correct final answer within the
 iteration cap — a smoke test that the whole pipeline (model + tools +
 self-correction) works together, not just each piece alone.
+
+## `tests/test_harness.py`
+Fast, no-LLM tests for the grading logic itself in `harness.py` — added
+after a real grading bug surfaced during the Phase 5 eval run (see
+`docs/evaluation-report.md`), to lock the fix in.
 
 ## `CLAUDE.md` / `docs/blueprint.md`
 Not code — persistent project memory. `CLAUDE.md` holds the locked

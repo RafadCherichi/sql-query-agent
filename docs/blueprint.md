@@ -110,7 +110,7 @@ STRICT CONSTRAINTS:
 ### Phase 1 — Environment & Scaffolding
 - New repo: `sql-query-agent`.
 - `venv`, matching Project 1's setup.
-- Install: `langgraph`, `langchain-community`, `langchain-core`, `ollama`, `sqlalchemy`, `pandas`, `streamlit`, `pytest`.
+- Install: `langgraph`, `langchain-community`, `langchain-core`, `langchain-ollama`, `ollama`, `sqlalchemy`, `pandas`, `streamlit`, `pytest`. (`langchain-ollama` was added during Phase 3 — `langchain-community` no longer ships a `ChatOllama` chat model, so the dedicated integration package is needed to bind LangChain tools to the Ollama-served model.)
 - Install Ollama, pull `qwen2.5:3b-instruct-q4_K_M`, confirm GPU offload is active (Ollama logs will show GPU layers loaded).
 - `CLAUDE.md` with Section 1 verbatim, `docs/blueprint.md` with this plan.
 
