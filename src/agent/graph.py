@@ -43,12 +43,12 @@ def _has_successful_query(messages) -> bool:
     return False
 
 
-def _get_llm() -> ChatOllama:
-    return ChatOllama(model=MODEL_NAME, temperature=0)
+def _get_llm(model_name: str = MODEL_NAME) -> ChatOllama:
+    return ChatOllama(model=model_name, temperature=0)
 
 
-def build_agent():
-    llm = _get_llm()
+def build_agent(model_name: str = MODEL_NAME):
+    llm = _get_llm(model_name)
     llm_with_tools = llm.bind_tools(TOOLS)
 
     def call_model(state: AgentState) -> dict:
@@ -95,8 +95,8 @@ def build_agent():
     return graph.compile()
 
 
-def run_agent(question: str) -> dict:
-    agent = build_agent()
+def run_agent(question: str, model_name: str = MODEL_NAME) -> dict:
+    agent = build_agent(model_name)
     initial_state = {
         "messages": [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=question)],
         "iterations": 0,

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from langchain_core.messages import AIMessage, ToolMessage
 
-from src.agent.graph import run_agent
+from src.agent.graph import MODEL_NAME, run_agent
 
 DB_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "chinook.db"
 
@@ -59,9 +59,9 @@ def extract_last_successful_query(messages) -> tuple[str | None, str | None]:
     return sql, result_str
 
 
-def evaluate_question(q: dict) -> dict:
+def evaluate_question(q: dict, model_name: str = MODEL_NAME) -> dict:
     expected_rows = run_ground_truth(q["sql"])
-    agent_state = run_agent(q["question"])
+    agent_state = run_agent(q["question"], model_name=model_name)
     agent_sql, agent_result_str = extract_last_successful_query(agent_state["messages"])
 
     agent_rows = None
