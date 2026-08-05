@@ -202,30 +202,69 @@ question cleanly hit the iteration cap and returned an honest "I couldn't
 do this" answer via `force_answer` — but it can't manufacture a working
 tool call the underlying model isn't producing in the first place.
 
-### Decision on qwen2.5-coder: not promoted, not evaluable for accuracy
+### Decision on qwen2.5-coder: not promoted — and the 0% must not be read as "worse at SQL"
 
-Fails both promotion criteria more decisively than SQLCoder did: doesn't
-fit 4GB VRAM, and scored 0% — not because its SQL reasoning is worse, but
-because it couldn't participate in the architecture at all. Between the two
+**This is a compatibility gap, not a competence gap, and the two must not
+be conflated.** Nothing here shows qwen2.5-coder is bad at writing SQL —
+it never got far enough to demonstrate that either way, because it
+couldn't reliably produce a tool call this project's harness could
+recognize as one. That's a materially different claim than SQLCoder's
+21.4%, which *is* a genuine accuracy measurement (SQLCoder's queries ran,
+executed, and returned the wrong data for an identifiable reason —
+Postgres-dialect habits). qwen2.5-coder's queries mostly never ran at all.
+Put plainly: qwen2.5-coder likely *can* write good SQL — it just doesn't
+integrate with Ollama's tool-calling template the way
+`qwen2.5:3b-instruct` does, at least at this quantization, today. A
+different serving setup, a different quantization, or a future Ollama
+template fix could plausibly change this outcome entirely without the
+model's actual SQL ability changing at all.
+
+Fails both promotion criteria regardless — doesn't fit 4GB VRAM, and
+scored 0% on this harness — but "doesn't fit" and "scored 0%" are the
+correct, precise findings here, not "is a worse model." Between the two
 comparisons, SQLCoder is the more informative "loses on accuracy for a
 specific, understood reason" data point; qwen2.5-coder is the more
-informative "isn't a safe default assumption that 'supports tools' in an
-Ollama model card means it *reliably* drives a tool-calling loop" data
-point.
+informative "'supports tools' in an Ollama model card is not a safe
+assumption that a model *reliably* drives a tool-calling loop in
+practice" data point.
 
 ## Final decision: Qwen2.5-3B-Instruct remains primary
 
 Both comparisons in Step 1 are now measured, not assumed:
 
-| Model | Architecture | Score | Fits 4GB VRAM? | Promoted? |
-|---|---|---|---|---|
-| **Qwen2.5-3B-Instruct (Q4_K_M)** | Agentic (ReAct) | **71.4% (20/28)** | **Yes — 100% GPU, 2.2GB** | **Primary** |
-| SQLCoder (Defog) | Single-shot only (no tool-calling support) | 21.4% (6/28) | No — 4.8GB, partial CPU | No |
-| qwen2.5-coder:7b | Agentic (ReAct), unreliable tool-call format | 0% (0/28) | No — 5.1GB, partial CPU | No |
+| Model | Architecture | Score | What the score actually measures | Fits 4GB VRAM? | Promoted? |
+|---|---|---|---|---|---|
+| **Qwen2.5-3B-Instruct (Q4_K_M)** | Agentic (ReAct) | **71.4% (20/28)** | End-to-end agentic execution accuracy | **Yes — 100% GPU, 2.2GB** | **Primary** |
+| SQLCoder (Defog) | Single-shot only (no tool-calling support) | 21.4% (6/28) | Genuine SQL-generation accuracy (dialect mismatch) | No — 4.8GB, partial CPU | No |
+| qwen2.5-coder:7b | Agentic (ReAct), unreliable tool-call format | 0% (0/28) | Tool-calling format compatibility, **not** SQL quality | No — 5.1GB, partial CPU | No |
 
 Qwen2.5-3B-Instruct stays the primary model for Phase 6 and beyond. Every
 alternative tried — a SQL-specialized model and a larger coder-focused
 general model — either couldn't run the actual architecture this project
 depends on, or couldn't fit the hardware budget this project is scoped to,
 or both. The original Phase 1 choice holds up under actual measurement,
-not just the original reasoning.
+not just the original reasoning. The three scores in this table are **not
+a single leaderboard** — each measures a different thing, per the "what
+the score actually measures" column, and only Qwen2.5-3B's number
+represents this project's actual target metric (agentic execution
+accuracy).
+
+### Why we didn't promote — summary for reuse (docs/design-decisions-faq.md, Step 5)
+
+Two independent, sufficient reasons, either one alone would have been
+disqualifying:
+
+1. **Hardware budget.** Both alternatives needed more than 4GB of VRAM
+   (SQLCoder: 4.8GB / 51%-49% CPU-GPU split; qwen2.5-coder:7b: 5.1GB /
+   55%-45% split), so neither fits the 100%-GPU, 4GB-ceiling constraint
+   this project is scoped to — regardless of how either scored on
+   accuracy.
+2. **Accuracy/compatibility, measured not assumed.** SQLCoder scored
+   21.4% via a genuine, identifiable weakness: 54% of its failures came
+   from generating `ILIKE`, a PostgreSQL-only operator that doesn't exist
+   in SQLite — a real dialect mismatch, not a training deficiency in SQL
+   generally. qwen2.5-coder:7b scored 0%, but for a *different* reason
+   that must not be conflated with "worse at SQL": it couldn't reliably
+   produce output in the `<tool_call>` format Ollama's parser requires, so
+   it never got to demonstrate its SQL ability at all — a tool-calling
+   compatibility gap, not a competence gap.
