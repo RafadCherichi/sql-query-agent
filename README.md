@@ -80,3 +80,9 @@ requirement.
   alternatives, self-correction behavior) with comparisons against
   alternatives actually tried, not just reasoned about.
 - `docs/v2-upgrade.md` — the planned upgrade path to a larger dataset (Olist).
+- `docs/pm-perspective.md` — the product framing: business problem, success
+  metrics beyond accuracy, a real ship-vs-review scoping call, phased
+  rollout gates, and a risk register.
+- `docs/design-decisions-faq.md` — anticipated interviewer questions
+  ("why not a hosted API," "why not a fine-tuned SQL model," etc.),
+  answered with this repo's actual numbers.
