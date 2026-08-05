@@ -1,4 +1,49 @@
-# Observed: small model narrates tool calls instead of making them
+# Concept: enforcing agent behavior — prompt instruction vs. graph-level invariant
+
+## (a) What this is, generally
+
+There are two levels at which you can try to constrain what an LLM agent
+does: **telling it** (a system-prompt rule or worked example, which the
+model may or may not reliably follow), or **structurally preventing** a
+bad state from being reachable at all (a check in the surrounding code
+that refuses to accept certain outputs as valid, regardless of what the
+model produces). The first is cheap to add and works probabilistically;
+the second requires identifying the exact invalid state mechanically and
+is more reliable, but only guards against the specific failure it was
+built to catch.
+
+## (b) How it's used here
+
+Both levels were actually tried, in sequence, on the same failure mode
+(a small model narrating a tool call instead of making one):
+
+- **Prompt-level (tried first):** a rule and later worked examples added
+  directly to `SYSTEM_PROMPT` in `src/agent/prompts.py`.
+- **Graph-level (tried second, after the prompt-level fix proved
+  insufficient):** `src/agent/graph.py`'s `_has_successful_query()`
+  function checks the message history for a real, successful `run_query`
+  call; `route_after_model()` uses that check to refuse to end the
+  conversation on narration alone, routing instead to the `nudge` node
+  (its prompt text is `NUDGE_PROMPT` in `src/agent/prompts.py`), which
+  loops back and consumes one iteration of the same `MAX_ITERATIONS`
+  budget as a real tool call.
+
+## (c) When each would be the better choice
+
+The full arc below is the evidence for this: the prompt-level rule
+*reduced* the failure rate but didn't eliminate it; a stronger worked
+example in the prompt fixed its two target cases but made the *aggregate*
+failure rate worse elsewhere; only the graph-level invariant closed the
+gap broadly, with zero regressions. **Prompt-level fixes are worth trying
+first** when the failure is rare/isolated and the cost of being wrong is
+low — they're cheap and sometimes sufficient (see the FK-id fix in the
+"Phase 5b" section below, which worked and stuck). **Graph-level
+invariants are worth the extra engineering effort** once a prompt fix is
+measurably insufficient (not just "seems okay on the cases you checked")
+or once the failure mode has a clean, mechanically-checkable definition
+("has a real tool result ever been produced") — which narration-detection
+turned out to have, and which is why it could be enforced in code at all.
+The full debugging arc that led to this conclusion:
 
 ## What happened
 

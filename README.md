@@ -1,5 +1,36 @@
 # Text-to-SQL Data Query Agent
 
+## How to read this project
+
+This repo has more documentation than a typical portfolio piece — it's
+part of the deliverable, not just support material. Recommended order:
+
+1. **This README** (you're reading it) — the project summary, headline
+   result, and this reading order, so you know what's coming before you
+   dive into any one document.
+2. **[`docs/pm-perspective.md`](docs/pm-perspective.md)** — the business
+   framing (self-serve BI, success metrics beyond accuracy, a real
+   ship-vs-review scoping call) comes right after the summary, before any
+   technical justification, since it's the "why this matters" layer the
+   rest of the docs build on.
+3. **[`docs/design-decisions-faq.md`](docs/design-decisions-faq.md)** —
+   the anticipated hard questions ("why not a hosted API," "why not a
+   fine-tuned model"), answered with this repo's actual numbers; reads
+   naturally next once you have the business framing and want the
+   technical justification behind it.
+4. **[`docs/learning-notes/`](docs/learning-notes/)** — the detailed,
+   per-concept write-ups (model choice, LangGraph vs. alternatives,
+   self-correction design) that the FAQ's answers are actually drawn
+   from; go here once you want the full comparison behind a specific
+   claim rather than the summary of it.
+5. **[`docs/architecture.md`](docs/architecture.md)** — a plain-language,
+   file-by-file code walkthrough, useful once you're ready to read or run
+   the code itself rather than the decisions behind it.
+6. **[`docs/evaluation-report.md`](docs/evaluation-report.md)** — the full
+   accuracy evaluation and failure taxonomy, saved for last since it's the
+   most detailed document and presumes the architecture context from
+   step 5.
+
 ## Problem Statement
 
 Databases store data in tables, and getting an answer out of them normally

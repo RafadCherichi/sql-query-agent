@@ -57,7 +57,7 @@ A ninth item is deliberately *not* numbered into this taxonomy: `J8`'s
 "known grading-format edge case" (the agent found the *correct* data but
 returned a concatenated `"FirstName LastName"` column instead of the
 ground truth's two separate columns) recurs identically in the Groq
-comparison (`docs/learning-notes/model-choice.md`, Step 2). It's a
+comparison (`docs/learning-notes/model-choice.md`, Concept card 4). It's a
 limitation of exact-value grading, not a model reasoning failure, so it's
 tracked separately rather than counted as a 9th failure mode.
 
@@ -426,7 +426,7 @@ category 1, above, is fully resolved). What's left, mapped onto the
   Same as reported above — correct data, concatenated name column instead
   of separate `FirstName`/`LastName`. Not re-litigated; still not a
   harness bug per scope. Recurs identically in the Groq comparison
-  (`docs/learning-notes/model-choice.md`, Step 2), confirming it's a
+  (`docs/learning-notes/model-choice.md`, Concept card 4), confirming it's a
   property of the grading method, not this model specifically.
 - **(Category 2) Fully reproducible hallucination, identical across all three runs
   (1: `A3`).** `SELECT COUNT(*) FROM playlists WHERE name = 'Classical'`

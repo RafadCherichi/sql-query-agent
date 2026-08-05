@@ -82,7 +82,7 @@ ceiling the primary model fits inside cleanly (2.2GB, 100% GPU).
 
 Both failures — the tool-calling incompatibility and the dialect mismatch
 — are disqualifying independently of each other. See
-`docs/learning-notes/model-choice.md`'s "Step 1" section for the full
+`docs/learning-notes/model-choice.md`'s "Concept card 2" section for the full
 methodology, including a real bug found and fixed mid-comparison (an
 extraction bug that initially mis-scored a genuinely correct SQLCoder
 answer because it didn't strip preamble text before the query — corrected
@@ -124,7 +124,7 @@ in the architecture), but arrived at differently: SQLCoder rejected tool
 binding outright; qwen2.5-coder accepted it but couldn't reliably produce
 the required output format. It also doesn't fit the hardware budget either
 way (5.1GB resident, 55%/45% split). See
-`docs/learning-notes/model-choice.md`'s "Step 1, continued" section for
+`docs/learning-notes/model-choice.md`'s "Concept card 3" section for
 the full trace evidence.
 
 ---

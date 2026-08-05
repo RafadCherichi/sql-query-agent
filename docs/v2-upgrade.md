@@ -10,7 +10,7 @@ hardware headroom is available.
 
 Measured, not assumed, at several points in this build: system RAM free was
 observed as low as ~457MB and rarely above ~1.6GB out of 8GB total (see
-`docs/learning-notes/model-choice.md`'s Phase 5b and Step 1 notes), and the
+`docs/learning-notes/model-choice.md`'s "Concept card 1" notes), and the
 RTX 3050's 4GB VRAM is already fully committed by the primary model with
 minimal headroom. Loading a larger schema doesn't change the model's own
 memory footprint much, but a more complex schema means longer prompts
