@@ -47,8 +47,11 @@ def _get_llm(model_name: str = MODEL_NAME) -> ChatOllama:
     return ChatOllama(model=model_name, temperature=0)
 
 
-def build_agent(model_name: str = MODEL_NAME):
-    llm = _get_llm(model_name)
+def build_agent(model_name: str = MODEL_NAME, llm=None):
+    """llm lets a comparison run inject a non-Ollama chat model (e.g.
+    ChatGroq) without touching the primary pipeline — model_name is ignored
+    when llm is provided."""
+    llm = llm or _get_llm(model_name)
     llm_with_tools = llm.bind_tools(TOOLS)
 
     def call_model(state: AgentState) -> dict:
@@ -95,8 +98,8 @@ def build_agent(model_name: str = MODEL_NAME):
     return graph.compile()
 
 
-def run_agent(question: str, model_name: str = MODEL_NAME) -> dict:
-    agent = build_agent(model_name)
+def run_agent(question: str, model_name: str = MODEL_NAME, llm=None) -> dict:
+    agent = build_agent(model_name, llm=llm)
     initial_state = {
         "messages": [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=question)],
         "iterations": 0,

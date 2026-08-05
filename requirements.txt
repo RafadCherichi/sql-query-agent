@@ -7,3 +7,5 @@ sqlalchemy
 pandas
 streamlit
 pytest
+langchain-groq
+python-dotenv

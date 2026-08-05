@@ -59,9 +59,9 @@ def extract_last_successful_query(messages) -> tuple[str | None, str | None]:
     return sql, result_str
 
 
-def evaluate_question(q: dict, model_name: str = MODEL_NAME) -> dict:
+def evaluate_question(q: dict, model_name: str = MODEL_NAME, llm=None) -> dict:
     expected_rows = run_ground_truth(q["sql"])
-    agent_state = run_agent(q["question"], model_name=model_name)
+    agent_state = run_agent(q["question"], model_name=model_name, llm=llm)
     agent_sql, agent_result_str = extract_last_successful_query(agent_state["messages"])
 
     agent_rows = None

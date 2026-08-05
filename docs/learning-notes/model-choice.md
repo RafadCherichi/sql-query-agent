@@ -268,3 +268,102 @@ disqualifying:
    produce output in the `<tool_call>` format Ollama's parser requires, so
    it never got to demonstrate its SQL ability at all — a tool-calling
    compatibility gap, not a competence gap.
+
+---
+
+## Step 2: hosted comparison via Groq (free tier) — comparison only, no promotion path
+
+Step 1 asked "is there a better *local* model?" Step 2 asks a different
+question: how much accuracy is actually being traded away for the
+reliability/privacy/cost properties of running locally at all? This
+requires a genuinely more capable class of model than anything that fits
+in 4GB VRAM — a hosted one.
+
+### Model choice: openai/gpt-oss-120b, not llama-3.3-70b-versatile
+
+The original plan named Qwen2.5-7B or Llama 3.3 70B, "whichever Groq
+currently hosts." Checked at build time: **Qwen2.5 is not on Groq's
+free/developer tier at all** (only an enterprise-only `qwen/qwen3.6-27b`
+preview). **Llama 3.3 70B (`llama-3.3-70b-versatile`) was deprecated by
+Groq on June 17, 2026** for free/developer-tier usage, with Groq's own
+migration guidance pointing to `openai/gpt-oss-120b`. Building this
+comparison on a model actively being phased out would risk it becoming
+unavailable later for no benefit, so `openai/gpt-oss-120b` was used
+instead — larger (120B vs. 70B), Groq's currently-supported path, strong
+native tool-calling (notable given Step 1's `qwen2.5-coder` template
+failure), and a higher daily token cap on the free tier.
+
+### Setup
+
+`src/agent/graph.py`'s `build_agent`/`run_agent` now accept an optional
+`llm` object (in addition to the existing `model_name` string), so a
+non-Ollama chat model can be injected without touching the primary
+pipeline's default path — verified via the full test suite (all 13 still
+pass with `llm=None`, the default). `src/eval/run_eval_groq.py` runs the
+same 28 questions through the same harness (`evaluate_question`, same
+`rows_match` grading, unmodified) with a `ChatGroq` instance instead of
+`ChatOllama`. The API key is read from a git-ignored `.env` file, never
+committed or logged.
+
+### Score: 25/28 (89.3%) automated — but functionally 28/28 on manual review
+
+| Category | Groq (gpt-oss-120b) | Qwen2.5-3B (local) |
+|---|---|---|
+| Single-table | 8/8 | 8/8 |
+| Join | 9/12 | 7/12 |
+| Aggregation | 8/8 | 5/8 |
+| **Avg. iterations/question** | **2.82** | **2.86** |
+
+The 3 automated "failures" (`J3`, `J4`, `J8`) are, on inspection, the exact
+same grading-format edge case already documented for Qwen's `J8`: the model
+found the **correct data** every time but returned it as one concatenated
+`"FirstName LastName"` column instead of the ground truth's two separate
+columns (e.g. `"Nancy Edwards"` vs. `["Nancy", "Edwards"]`). This is a
+known, already-documented limitation of exact-value grading, not a
+reasoning error — manually reviewed, gpt-oss-120b answered all 28 questions
+correctly in substance. No rate-limit errors and no failed requests across
+the full run.
+
+Worth being precise about the comparison: **avg. iterations were nearly
+identical (2.82 vs. 2.86)** — the earlier expectation that a much larger
+model would need visibly fewer retries didn't hold up under measurement,
+so that claim is deliberately not made here.
+
+### The tradeoff, quantified (this section is source material for the Step 5 FAQ)
+
+- **Accuracy delta:** 89.3% automated (functionally 100%) vs. 71.4% local —
+  a real, meaningful gap. A frontier-class hosted model genuinely answers
+  more questions correctly, including several of the exact failure
+  categories the local model couldn't solve (multi-hop joins like `A5`,
+  dialect-sensitive queries).
+- **Data privacy:** every question and the full database schema were sent
+  to a third-party API for this comparison. For a project whose explicit
+  reliability requirement is "no live external API dependency in the agent
+  loop itself," this is a direct trade against that requirement, not a
+  free upgrade — schema and query content leaving the local machine is the
+  cost of the accuracy gain, not a side detail.
+- **Free-tier rate limits:** this run (28 questions, ~3 model calls each,
+  ~80 total requests) completed without hitting a rate limit — but Groq's
+  free tier caps both requests-per-minute and tokens-per-day, and a bigger
+  eval set, a live multi-user demo, or production traffic would plausibly
+  hit those ceilings in a way a local model never can, since local
+  inference has no rate limit at all (only a speed ceiling).
+- **External dependency risk in a live demo:** the local pipeline has no
+  failure mode where a demo breaks because an external service is down,
+  slow, or has changed its API — this was Section 1's explicit reliability
+  priority, and it's a property Groq (or any hosted API) cannot provide by
+  definition, independent of how good its accuracy is.
+
+### Decision: comparison only, not promoted, by design — not because it lost
+
+Unlike Step 1's alternatives, gpt-oss-120b didn't fail on accuracy or
+compatibility — it's the best-performing model tested in this entire
+project. It's excluded from the primary pipeline anyway, because the
+promotion criteria for Steps 1 and 2 were never the same: Step 1 asked
+"is there a better model within our exact constraints (local, $0, fits
+4GB VRAM)," and a win there would have replaced the primary model. Step 2
+deliberately steps outside those constraints to measure what's being given
+up — a win here confirms the tradeoff is real and quantifiable, it doesn't
+change the decision, because the decision was about which properties this
+project needs (local, offline, zero external dependency in the demo loop),
+not just which model scores highest in isolation.
