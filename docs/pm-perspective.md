@@ -130,7 +130,13 @@ ID match has no observed failure mode in the final build.
    Chinook's on questions of equivalent type-mix.** If accuracy drops
    substantially on Olist's larger schema, that's a signal the model or
    architecture needs revisiting before any production schema is
-   attempted, not a signal to lower the bar.
+   attempted, not a signal to lower the bar. This gate is not
+   precautionary — `docs/learning-notes/schema-memorization-check.md`
+   found the local model's schema-linking on Chinook is guess-first, not
+   discover-first (it never called `list_tables` even after two
+   consecutive "table not found" errors on a renamed copy of the same
+   data), so Chinook's 71.4% carries a real, demonstrated risk of not
+   transferring to a schema with unfamiliar naming.
 3. **Production schema.** Real business data, real stakes. **Gate: no
    query type ships un-reviewed unless it has been specifically evaluated
    on that schema and clears a higher bar than Chinook's 71.4%** — the
