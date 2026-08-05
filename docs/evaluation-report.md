@@ -6,6 +6,61 @@
 > second, later run (14/28) after two bounded prompt fixes — it does not
 > replace or edit the original numbers or analysis.
 
+## Canonical failure taxonomy (8 categories)
+
+This is the authoritative numbering for this project's failure modes —
+`docs/pm-perspective.md` and `docs/design-decisions-faq.md` reference these
+same 8 categories by number rather than re-deriving them. It reflects the
+**final build's state** (after the Phase 5b graph-level guard); the
+detailed prose further down documents the same categories in the
+chronological detail they were actually found in, at each stage of the
+build, and now points back to this list rather than renumbering.
+
+1. **Narrates the next tool call instead of making it** (originally 4
+   cases: `S3`, `J2`, `J3`, `J4`). **Fixed** — the Phase 5b graph-level
+   guard (see `docs/learning-notes/self-correction-behavior.md`)
+   structurally prevents this from being reachable in the final build.
+2. **Hallucinated false claims about data already retrieved** (originally
+   3 cases: `S5`, `S7`, `A3`; 1 remains: `A3`). **Still occurs** — `A3` is
+   fully reproducible and unchanged across every version of the build
+   tested (confidently claims a playlist "does not exist" while having
+   just listed it).
+3. **SQL runs without error but is silently wrong — self-correction has no
+   signal to react to** (originally 2 cases: `J1`, `J7`; 2 remain: `J1`,
+   `J4`). **Still occurs** — the sharpest limitation of the current
+   design. `J7`'s original manifestation (correlated-subquery column
+   scoping) doesn't recur in the final build, but the category persists
+   via new instances: `J1`'s typo, `J4`'s SQL-Server-style `+` string
+   concatenation silently coercing to numeric in SQLite.
+4. **Returns the raw foreign-key ID instead of joining for the
+   human-readable name** (originally 3 cases: `J10`, `A2`, `J11`).
+   **Fixed** — a system-prompt instruction added in Phase 5b; not observed
+   in the final result set.
+5. **Self-correction retries repeatedly but never converges / exhausts the
+   iteration budget** (originally 3 cases: `J8`, `A4`, `A7`; 3 remain:
+   `J11`, `A2`, `A5`). **Still occurs**, though the specific failing
+   questions have shifted — the original three are now fixed or
+   reclassified, and `J11`/`A2`/`A5` now populate this category instead.
+6. **Genuinely empty first response, anomalous silent stop** (originally 1
+   case: `J6`). **Fixed** — root cause never fully pinned down, but not
+   reproduced since.
+7. **Can't find a required multi-hop join** (1 case: `A5`, unresolved
+   across every version of the build). **Still occurs** — the same
+   question every time; this project's hardest join-depth case.
+8. **The graph-level guard checks that *some* query succeeded, not that
+   the *most recent* one is what the final answer is based on** (1 case:
+   `J3`). **New** — this category couldn't exist before the Phase 5b
+   guard did; discovered and reported honestly as a narrow gap in the fix
+   itself, not hidden.
+
+A ninth item is deliberately *not* numbered into this taxonomy: `J8`'s
+"known grading-format edge case" (the agent found the *correct* data but
+returned a concatenated `"FirstName LastName"` column instead of the
+ground truth's two separate columns) recurs identically in the Groq
+comparison (`docs/learning-notes/model-choice.md`, Step 2). It's a
+limitation of exact-value grading, not a model reasoning failure, so it's
+tracked separately rather than counted as a 9th failure mode.
+
 ## Headline result
 
 **11 / 28 (39.3%) execution accuracy** — does the agent's SQL return the same
@@ -90,6 +145,12 @@ rows were already stored) moved 4 questions from FAIL to PASS: `S6`, `A1`,
 | A8 | aggregation | Average track length in ms? | PASS | 2 |
 
 ## Failure root causes
+
+Numbered per the **canonical failure taxonomy** at the top of this report
+(categories 1–7; category 8 didn't exist yet at this 11/28 stage, since it
+only became possible after Phase 5b's guard was introduced). This section
+documents each category in the narrative detail it was originally found
+in, at this stage of the build.
 
 **1. Narrates the next tool call instead of making it (4 cases: S3, J2, J3,
 J4).** The Phase 3 checkpoint found this exact bug and fixed it with a
@@ -336,9 +397,11 @@ against.
 ### The 8 remaining failures — genuinely different now
 
 None of the 8 remaining failures are pure "stopped without ever querying"
-narration anymore — the guard closed that path entirely. What's left:
+narration anymore — the guard closed that path entirely (canonical
+category 1, above, is fully resolved). What's left, mapped onto the
+**canonical failure taxonomy** at the top of this report:
 
-- **Silent wrong-but-executable SQL (2: `J1`, `J4`).** `J1` typo'd the
+- **(Category 3) Silent wrong-but-executable SQL (2: `J1`, `J4`).** `J1` typo'd the
   track name again (`'Balls to the Wal'` this time, not `'Walk'` —
   confirms this is a recurring, not one-off, weakness). `J4` is a new
   variant of the same underlying category: it used `+` for string
@@ -348,24 +411,29 @@ narration anymore — the guard closed that path entirely. What's left:
   useful. Both cases execute without a catchable error, so self-correction
   has nothing to react to — still the sharpest limitation of the design,
   exactly as originally documented.
-- **Exhausted the iteration budget without ever completing a working query
+- **(Category 5) Exhausted the iteration budget without ever completing a working query
   (3: `J11`, `A2`, `A5`).** These aren't stalls — `J11` correctly figured
   out mid-conversation that its assumed table name (`tracks_playlists`)
   was wrong and the real table is `playlist_track`, but ran out of
   iterations before actually querying it. Genuine progress, just not
   enough budget to finish. `A5` is the same known multi-hop-join limit as
   before (found Iron Maiden's `ArtistId`, never assembled the 4-table
-  join to revenue).
-- **Known grading-format edge case, unchanged (1: `J8`).** Same as
-  reported above — correct data, concatenated name column instead of
-  separate `FirstName`/`LastName`. Not re-litigated; still not a harness
-  bug per scope.
-- **Fully reproducible hallucination, identical across all three runs
+  join to revenue) — it also stands as canonical **category 7** on its own,
+  since "ran out of budget" (how it ended) and "couldn't find the join"
+  (why it couldn't converge) are two honest descriptions of the same case.
+- **(Not in the numbered taxonomy — a grading-methodology note, not a
+  failure mode) Known grading-format edge case, unchanged (1: `J8`).**
+  Same as reported above — correct data, concatenated name column instead
+  of separate `FirstName`/`LastName`. Not re-litigated; still not a
+  harness bug per scope. Recurs identically in the Groq comparison
+  (`docs/learning-notes/model-choice.md`, Step 2), confirming it's a
+  property of the grading method, not this model specifically.
+- **(Category 2) Fully reproducible hallucination, identical across all three runs
   (1: `A3`).** `SELECT COUNT(*) FROM playlists WHERE name = 'Classical'`
   every time — counts playlist rows instead of `playlist_track` rows,
   then confidently claims the playlist "does not exist." Untouched by
   either fix, exactly as predicted for a cluster deliberately left alone.
-- **A genuine limitation in the new guard itself, caught honestly
+- **(Category 8) A genuine limitation in the new guard itself, caught honestly
   (1: `J3`).** `_has_successful_query()` only checks that *some* `run_query`
   call succeeded — not that the *last* one is what the final answer is
   based on. `J3` ran `SELECT * FROM employees LIMIT 3` (a schema-peek,
