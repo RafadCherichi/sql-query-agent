@@ -80,8 +80,12 @@ a loop with a counter and an exit door:
    time.
 
 `run_agent(question)` is the simple entry point other code (tests, the
-future Streamlit app) calls: give it a plain-English question, get back
-the full conversation trace including the final answer.
+Streamlit app) calls: give it a plain-English question, get back the full
+conversation trace including the final answer. It also accepts an
+optional `llm` object — added in Steps 1/2 of the model-comparison work so
+a non-Ollama chat model (e.g. `ChatGroq`) can be swapped in for a
+comparison run without duplicating the graph itself; when omitted, the
+primary local model is used exactly as before.
 
 ## `src/eval/test_questions.py`
 The 28-question eval set. Each entry is a plain-English question paired
@@ -105,9 +109,52 @@ happens to contain the right value somewhere in it).
 
 ## `src/eval/run_eval.py`
 Runs every question in `test_questions.py` through the harness and
-writes one JSON line per question to `src/eval/results.jsonl` — written
-incrementally as it goes, so a partial run isn't lost if something
-crashes midway through 28 real LLM calls.
+writes one JSON line per question — written incrementally as it goes, so
+a partial run isn't lost if something crashes midway through 28 real LLM
+calls. Takes optional `--model` (which Ollama model to test) and
+`--output` (which file to write) flags, so the same script drives both
+the primary pipeline's own eval (`results.jsonl`, no flags) and local
+model-comparison runs like `qwen2.5-coder:7b` (Step 1) without duplicating
+any grading logic.
+
+## `src/eval/run_eval_groq.py`
+The same idea as `run_eval.py`, but for a hosted model via Groq's API
+instead of a local Ollama model — used for Step 2's comparison. Reads
+`GROQ_API_KEY` from a git-ignored `.env` file (never committed) and builds
+a `ChatGroq` instance to inject into the same `evaluate_question` harness.
+This script, and the fact that a hosted model needs a differently-typed
+object injected rather than just a different model-name string, is why
+`build_agent`/`run_agent` accept an `llm` override rather than only a
+`model_name`.
+
+## `src/eval/sqlcoder_single_shot.py`
+A separate, non-agentic eval path for models that don't support
+Ollama's tool-calling protocol at all (SQLCoder, used in Step 1). Builds
+a schema-in-context prompt in Defog's documented single-shot format,
+extracts the SQL from the completion (robustly — an early bug here
+mis-scored a genuinely correct answer because it didn't strip preamble
+text like `### Hints` before the query), and grades the result through
+the same `rows_match`/`run_ground_truth` functions from `harness.py`.
+Kept separate from `run_eval.py` because the methodology is genuinely
+different (one LLM call, no tools, no self-correction), not because the
+grading is different.
+
+## `app/streamlit_app.py`
+The demo chat UI. Defaults to the primary local model on load — no
+internet, no API key, no external dependency, matching this project's
+reliability priority. A dropdown lets the user switch to a **hosted**
+comparison mode (`openai/gpt-oss-120b` via Groq) for the same question;
+switching shows an explicit on-screen caption that the question and the
+database schema will leave the machine and hit Groq's free tier, so the
+tradeoff is visible in the demo itself, not just in the docs. Both modes
+call the exact same `run_agent` — the app never duplicates agent logic,
+it just decides which `llm` (or none, for the default local path) to pass
+in. If the hosted call fails for any reason (missing API key, network
+issue, rate limit), the error is caught and shown with a suggestion to
+switch back to local, rather than crashing the app. Below the answer, it
+shows the full tool-call trace, the final SQL actually executed, and how
+many of the iteration budget's attempts were used — the same transparency
+the evaluation harness relies on, surfaced live.
 
 ## `tests/test_tools.py`
 Fast, no-LLM-required tests that check each tool in isolation: correct

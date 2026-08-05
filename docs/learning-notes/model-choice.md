@@ -367,3 +367,13 @@ up — a win here confirms the tradeoff is real and quantifiable, it doesn't
 change the decision, because the decision was about which properties this
 project needs (local, offline, zero external dependency in the demo loop),
 not just which model scores highest in isolation.
+
+### Step 3 follow-through: this comparison is now a live demo feature, not just an eval script
+
+`app/streamlit_app.py` surfaces exactly this choice to a user, not just to
+this document: it loads with the local Qwen2.5-3B pipeline by default (no
+internet, no API key needed), and offers gpt-oss-120b via Groq as an
+explicitly-labeled, opt-in comparison mode with the same tradeoff caption
+described above shown directly in the UI. The primary/comparison
+distinction made here isn't just documentation — it's enforced in the
+product itself.
